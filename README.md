@@ -66,7 +66,7 @@
 
 1. **1차: FAQ 답변 생성 라운드** — 항목 1·2·5·6·7 (답변 정확도 / RAG 충실도 / 표현 품질 / 명령 수행 / 성능)
    - Easy/Medium/Hard: **실행 완료** (9개 모델 × 9케이스씩)
-   - RAG 안정성(Small/Medium/Large): **데이터 준비 완료, 미실행** — 컨텍스트 개수(3/5/10개)별로 문서 3개 분리 (7-2절 참고)
+   - RAG 안정성(Small/Medium/Large): 컨텍스트 개수(3/5/10개)별로 문서 3개 분리 (7-2절 참고) — **Small/Medium 실행 완료, Large 미실행**
 2. **2차: 의도 판단 라운드 (데이터 준비 완료, 미실행)** — 항목 3·4 (FAQ 부재 판단 / 의도 분류). `data/eval_sets/intent_classification.csv`로 진행
 3. **3차: 클러스터 라벨링 라운드 (데이터 준비 완료, 미실행)** — 항목 9. `data/eval_sets/cluster_labeling.csv`로 진행
 
@@ -322,8 +322,8 @@ node scripts/aggregate_rag_stability_round.js small          # 4. 결과 문서 
 | [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 | ✅ 실행 완료 |
 | [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 | ✅ 실행 완료 |
 | [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 | ✅ 실행 완료 |
-| [`results/faq_rag_stability_small_results.md`](results/faq_rag_stability_small_results.md) | RAG 안정성(컨텍스트 2~3개) 모델별 결과 | 미실행 |
-| [`results/faq_rag_stability_medium_results.md`](results/faq_rag_stability_medium_results.md) | RAG 안정성(컨텍스트 3~5개) 모델별 결과 | 미실행 |
+| [`results/faq_rag_stability_small_results.md`](results/faq_rag_stability_small_results.md) | RAG 안정성(컨텍스트 2~3개) 모델별 결과 | ✅ 실행 완료 |
+| [`results/faq_rag_stability_medium_results.md`](results/faq_rag_stability_medium_results.md) | RAG 안정성(컨텍스트 3~5개) 모델별 결과 | ✅ 실행 완료 |
 | [`results/faq_rag_stability_large_results.md`](results/faq_rag_stability_large_results.md) | RAG 안정성(컨텍스트 10개) 모델별 결과 | 미실행 |
 | [`results/intent_classification_results.md`](results/intent_classification_results.md) | 의도 분류(항목 3·4) 모델별 결과 | 미실행 |
 | [`results/cluster_labeling_results.md`](results/cluster_labeling_results.md) | 클러스터 라벨링(항목 9) 모델별 결과 | 미실행 |
@@ -386,7 +386,8 @@ LLM_Test/
 - [x] Easy → Medium → Hard 9개 모델 실행 및 결과 문서 채우기
 - [x] RAG 안정성 케이스 유형당 3건→9건(63건)으로 확대, 컨텍스트 개수(3/5/10) 난이도 분리 — 데이터만 준비, 미실행
 - [x] RAG 안정성 전용 4단계 파이프라인 작성 (`run_rag_stability_round.js` 등 4종 — 10-5절 참고), 1건 스모크 테스트로 동작 확인
-- [ ] RAG 안정성 Small → Medium → Large 순으로 9개 모델 실행 및 결과 문서 채우기 (스크립트 준비 완료, 실행만 남음)
+- [x] RAG 안정성 Small → Medium 순으로 9개 모델 실행 및 결과 문서 채우기
+- [ ] RAG 안정성 Large 실행 및 결과 문서 채우기
 - [ ] 사람 채점 calibration set 소량 확보 후 Judge 신뢰도 검증 추가
 - [ ] 의도 판단 라운드(항목 3·4) 9개 모델 실행 및 결과 문서 채우기
 - [ ] 클러스터 라벨링 라운드(항목 9) 9개 모델 실행 및 결과 문서 채우기
