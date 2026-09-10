@@ -224,18 +224,68 @@ FAQ 컨텍스트 없이 사용자 질문만 주고 3-way로 분류합니다.
 
 `label`/`summary`가 `cluster_labeling_results.md`의 "생성 라벨"/"생성 요약" 컬럼에 들어가고, 같은 모델이 생성한 4개 `label`을 서로 비교해 라벨 구분력(문자열 유사도)을 계산합니다.
 
-## 10. 결과 문서
+## 10. 실행 파이프라인 (스크립트)
 
-| 문서 | 내용 |
-|---|---|
-| [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 |
-| [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 |
-| [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 |
-| [`results/faq_rag_stability_results.md`](results/faq_rag_stability_results.md) | RAG 안정성 시나리오(무관 FAQ/모순 FAQ/빈 컨텍스트 등) 모델별 결과 |
-| [`results/intent_classification_results.md`](results/intent_classification_results.md) | 의도 분류(항목 3·4) 모델별 결과 |
-| [`results/cluster_labeling_results.md`](results/cluster_labeling_results.md) | 클러스터 라벨링(항목 9) 모델별 결과 |
+`scripts/`에 있는 자동화 스크립트는 4단계 파이프라인을 각각 독립된 스크립트로 나눠서 구현했습니다. **한 스크립트로 합치지 않고 단계를 쪼갠 이유**: 각 단계 소요 시간·실패 가능성이 달라서(모델 호출은 몇 분~수십 분, Judge는 비교적 빠름), 한 단계가 실패하거나 기준이 바뀌었을 때 **앞 단계를 다시 안 돌리고 그 단계부터만 재실행**할 수 있어야 하기 때문입니다. 실제로 오늘 Judge 프롬프트를 고친 뒤 `judge_round.js`만 재실행하고 `run_round.js`(모델 호출)는 다시 안 돌렸습니다.
 
-## 11. 리포지토리 구조
+```
+scripts/
+├── lib/
+│   ├── csv.js          # CSV 파서
+│   ├── ollama.js        # Ollama REST API 클라이언트
+│   ├── metrics.js        # 결정론적 보조 지표 4종
+│   └── judge.js          # 헤드리스 Claude Judge 호출
+├── run_round.js          # 1단계: 모델 호출 → results/raw/faq_<round>.jsonl
+├── score_deterministic.js # 2단계: 보조지표 계산 → *.scored.jsonl
+├── judge_round.js        # 3단계: Judge 채점 → *.judged.jsonl
+└── aggregate_faq_round.js # 4단계: results/faq_<round>_results.md 표 갱신
+```
+
+### 10-1. 각 모듈을 이렇게 만든 기준
+
+| 모듈 | 선택 | 이유 |
+|---|---|---|
+| `lib/csv.js` | 라이브러리 대신 직접 구현 (RFC4180 유사 파서) + BOM 스트립 | 무료·로컬·제로 디펜던시 원칙(2절). 따옴표 안에 콤마 포함된 필드(예: `"FAQ-052, FAQ-054"`)가 실제 데이터에 있어 단순 `split(',')`로는 깨짐. **BOM 스트립은 실행 중 발견한 버그 수정** — PowerShell이 CSV를 `Encoding.UTF8`로 저장하면 파일 앞에 BOM이 붙어서 첫 컬럼명(`ID`, `FAQ ID`)이 안 읽히는 문제가 있었음 (Easy 라운드 1차 실행이 이 버그로 전부 무효였음) |
+| `lib/ollama.js` | `ollama run` CLI 대신 REST API(`/api/chat`)를 직접 호출 | API 응답에 `total_duration`/`load_duration`/`eval_count`/`eval_duration`이 구조화되어 와서 항목7(성능) 지표 계산에 필요. CLI stdout은 이 수치를 안 줌. `format:"json"` 옵션으로 출력을 JSON으로 강제해서 항목6(포맷 성공률) 측정과 직결시킴 |
+| `lib/metrics.js` | 4개 지표 모두 외부 라이브러리 없이 직접 구현 | README 8-1절 원칙(무료·로컬) 그대로 코드화. 키워드 매칭은 정확한 형태소 분석 대신 **부분 문자열(`includes`) 매칭**을 씀 — 한국어 조사 처리를 위해 형태소 분석기(Mecab 등)를 쓰려면 Java/바이너리 설치가 필요해 이번 프로젝트 취지에 안 맞다고 판단. ROUGE-L은 단어 단위 대신 **문자 단위 LCS**로 구현 — 한국어는 띄어쓰기 기준 단어 분리가 신뢰도가 낮아서(조사 결합), 문자 단위가 더 안정적 |
+| `lib/judge.js` | `claude -p`를 헤드리스로 호출, 프롬프트는 **stdin으로 전달** (커맨드라인 인자 아님) | 8절에서 정한 "Judge=Claude Code 헤드리스, Pro 사용량" 그대로 구현. 인자 대신 stdin을 쓴 이유는 한국어·특수문자·긴 텍스트가 섞인 프롬프트를 셸 인자로 넘기면 이스케이프 문제가 생기기 쉬워서. Windows에서 `claude.cmd`(npm 전역 설치 시 생기는 실행 래퍼)를 Node가 직접 실행 못 해서 `shell:true`가 필요했음(Windows Node.js의 알려진 제약) |
+
+### 10-2. 실행 중 발견해서 고친 것 (참고용)
+
+- **CSV BOM 문제**: 위 표 참고. `parseCsv()`가 이제 파일 시작의 BOM을 자동으로 제거합니다.
+- **Judge 응답 파싱 실패 (2가지 패턴)**: (1) 가끔 응답을 \`\`\`json 코드블록으로 감싸서 반환 → `stripCodeFence()`로 방어. (2) 모델이 출력 스키마를 그대로 복사한 것 같은 완전히 망가진 답변(예: `"answer": "사용자에게 보여줄 답변 텍스트"` 그대로 출력)을 채점시키면 Judge가 채점을 거부하고 설명 텍스트를 냄 → 프롬프트에 "실패작이어도 낮은 점수로 반드시 JSON만 출력" 지시를 명시해서 해결.
+
+### 10-3. 집계 스크립트의 판단 기준
+
+`aggregate_faq_round.js`가 표를 채울 때 정한 규칙:
+
+- **정답률(%)**: Judge의 `answer_accuracy`(1~5점) 중 **4점 이상을 "정답"으로 간주**해 비율을 냅니다. 이 임계값은 제가 임의로 정한 것이라 조정 가능합니다 — 더 엄격하게 하려면 5점만 정답으로 칠 수도 있습니다.
+- **환각률(%)**: Judge의 `faithful`이 `false`인 비율.
+- 결측/포맷실패 케이스는 요약 통계 계산에서 제외하고 표에는 "포맷실패"로 표시해 눈에 띄게 남깁니다.
+- 이 스크립트는 `## 모델별 결과` 마커 아래쪽만 다시 씁니다 — 개요/테스트 케이스/채점 기준 설명은 손대지 않고 그대로 둡니다. **표를 손으로 고치면 다음 실행 때 덮어써지니, 표 내용을 바꾸고 싶으면 스크립트나 원본 데이터를 고치세요** (단, `사람평가`/`사람 총평` 칸은 스크립트가 항상 빈 칸으로 두므로 자유롭게 손으로 채워도 덮어써지지 않습니다).
+
+### 10-4. 실행 방법
+
+```
+node scripts/run_round.js easy              # 1. 모델 호출
+node scripts/score_deterministic.js easy    # 2. 보조지표 계산
+node scripts/judge_round.js easy            # 3. Judge 채점
+node scripts/aggregate_faq_round.js easy    # 4. 결과 문서 갱신
+```
+`easy`를 `medium`/`hard`로 바꾸면 해당 라운드로 동일하게 실행됩니다.
+
+## 11. 결과 문서
+
+| 문서 | 내용 | 상태 |
+|---|---|---|
+| [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 | ✅ 실행 완료 |
+| [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 | 미실행 |
+| [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 | 미실행 |
+| [`results/faq_rag_stability_results.md`](results/faq_rag_stability_results.md) | RAG 안정성 시나리오(무관 FAQ/모순 FAQ/빈 컨텍스트 등) 모델별 결과 | 미실행 |
+| [`results/intent_classification_results.md`](results/intent_classification_results.md) | 의도 분류(항목 3·4) 모델별 결과 | 미실행 |
+| [`results/cluster_labeling_results.md`](results/cluster_labeling_results.md) | 클러스터 라벨링(항목 9) 모델별 결과 | 미실행 |
+
+## 12. 리포지토리 구조
 
 ```
 LLM_Test/
@@ -252,7 +302,21 @@ LLM_Test/
 │       ├── rag_faithfulness.csv
 │       ├── cluster_labeling.csv
 │       └── intent_classification.csv    # 위 5개 파일 통합
+├── scripts/
+│   ├── lib/
+│   │   ├── csv.js
+│   │   ├── ollama.js
+│   │   ├── metrics.js
+│   │   └── judge.js
+│   ├── run_round.js
+│   ├── score_deterministic.js
+│   ├── judge_round.js
+│   └── aggregate_faq_round.js
 └── results/
+    ├── raw/                              # 스크립트 중간 산출물 (jsonl), 사람이 직접 편집하지 않음
+    │   ├── faq_easy.jsonl
+    │   ├── faq_easy.scored.jsonl
+    │   └── faq_easy.judged.jsonl
     ├── faq_easy_results.md
     ├── faq_medium_results.md
     ├── faq_hard_results.md
@@ -261,12 +325,14 @@ LLM_Test/
     └── cluster_labeling_results.md
 ```
 
-## 12. TODO
+## 13. TODO
 
-- [ ] Ollama에 9개 후보 모델 설치 및 워밍업(모델 로드 시간 분리 측정)
+- [x] Ollama에 9개 후보 모델 설치 (`gemma3:12b`는 계획에 없던 추가 설치, 이번 테스트 대상에서는 제외)
 - [x] 프롬프트 템플릿 확정 (답변 생성/의도 분류/클러스터 라벨링 — 9절 참고)
-- [ ] 결정론적 보조 지표 계산 스크립트 작성 (키워드 커버리지, ROUGE-L, 숫자/고유명사 검증, 라벨 문자열 유사도)
-- [ ] Easy → Medium → Hard → RAG 안정성 순으로 9개 모델 실행 및 결과 문서 채우기
+- [x] 결정론적 보조 지표 계산 스크립트 작성 (10절 참고)
+- [x] Easy 라운드 9개 모델 실행 및 결과 문서 채우기
+- [ ] Medium → Hard → RAG 안정성 순으로 9개 모델 실행 및 결과 문서 채우기
 - [ ] 사람 채점 calibration set 소량 확보 후 Judge 신뢰도 검증 추가
 - [ ] 의도 판단 라운드(항목 3·4) 9개 모델 실행 및 결과 문서 채우기
 - [ ] 클러스터 라벨링 라운드(항목 9) 9개 모델 실행 및 결과 문서 채우기
+- [ ] Easy 라운드 `사람평가`/`사람 총평` 칸 검토 및 채우기
