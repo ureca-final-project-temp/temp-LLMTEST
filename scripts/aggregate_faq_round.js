@@ -47,42 +47,52 @@ function cell(text) {
   return String(text).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
+// Column order for the compact metrics table (after the leading ID column).
+const METRIC_COLS = ['답변정확도', '키워드%', 'ROUGE-L', 'RAG충실도', '숫자/고유명사', '표현품질', '포맷성공', 'Latency(ms)', 'TPS', '사람평가'];
+
+function row(id, cells) {
+  return `| ${id} | ${cells.join(' | ')} |`;
+}
+
 function buildModelSection(modelTag, modelLabel, records, ids, excludedId) {
   const byId = new Map(records.filter((r) => r.model === modelTag).map((r) => [r.id, r]));
   const rows = [];
+  const qaBlocks = [];
   const validRows = [];
 
   for (const id of ids) {
     if (id === excludedId) {
       const anyRec = records.find((r) => r.id === id);
-      const q = anyRec ? cell(anyRec.query) : '';
-      rows.push(`| ${id} | ${q} | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | (MAP_API — 의도분류 참고) |`);
+      if (anyRec) qaBlocks.push(`**${id}** (MAP_API — 제외)\n> **Q.** ${anyRec.query}`);
+      rows.push(row(id, ['N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', '(MAP_API — 의도분류 참고)']));
       continue;
     }
     const rec = byId.get(id);
     if (!rec) {
-      rows.push(`| ${id} | (누락) | | | | | | | | | | | | |`);
+      rows.push(row(id, ['(누락)', '-', '-', '-', '-', '-', '-', '-', '-', '']));
       continue;
     }
-    const q = cell(rec.query);
     if (!rec.ok || !rec.formatValid || !rec.parsed) {
-      const badAnswer = cell(rec.rawContent || rec.error || '(응답 없음)');
-      rows.push(`| ${id} | ${q} | ${badAnswer} | 포맷실패 | - | - | - | - | (JSON 파싱 실패) | - | X | ${fmt(rec.latencyMs, 0)} | ${fmt(rec.tokensPerSec)} | |`);
+      qaBlocks.push(`**${id}** — 포맷 실패\n> **Q.** ${rec.query}\n>\n> **A.** _(JSON 파싱 실패: ${(rec.rawContent || rec.error || '').slice(0, 200)})_`);
+      rows.push(row(id, ['포맷실패', '-', '-', '-', '-', '-', 'X', fmt(rec.latencyMs, 0), fmt(rec.tokensPerSec), '']));
       continue;
     }
     const det = rec.det || {};
     const judge = rec.judge && rec.judge.ok ? rec.judge.scores : null;
-    const answer = cell(rec.parsed.answer);
+    const qaLines = [`**${id}**`, `> **Q.** ${rec.query}`, `>`, `> **A.** ${rec.parsed.answer}`];
+    if (judge && !judge.faithful && judge.hallucination) qaLines.push(`>`, `> ⚠️ 환각: ${judge.hallucination}`);
+    if (det.numberVerification && !det.numberVerification.pass) qaLines.push(`>`, `> ⚠️ 미검증 수치: ${det.numberVerification.unverified.join(', ')}`);
+    qaBlocks.push(qaLines.join('\n'));
+
     const kw = det.keywordCoverage ? `${fmt(det.keywordCoverage.coveragePct)}%` : '-';
     const rouge = det.rougeL ? fmt(det.rougeL.f1, 3) : '-';
-    const numCheck = det.numberVerification ? (det.numberVerification.pass ? 'O' : `X(${det.numberVerification.unverified.join(',')})`) : '-';
+    const numCheck = det.numberVerification ? (det.numberVerification.pass ? 'O' : 'X') : '-';
     const acc = judge ? `${judge.answer_accuracy}/5` : '-';
     const faithful = judge ? (judge.faithful ? 'O' : 'X') : '-';
-    const hallu = judge && judge.hallucination ? cell(judge.hallucination) : '-';
     const expr = judge ? `${judge.expression_quality}/5` : '-';
     const fmtOk = rec.formatValid ? 'O' : 'X';
 
-    rows.push(`| ${id} | ${q} | ${answer} | ${acc} | ${kw} | ${rouge} | ${faithful} | ${numCheck} | ${hallu} | ${expr} | ${fmtOk} | ${fmt(rec.latencyMs, 0)} | ${fmt(rec.tokensPerSec)} | |`);
+    rows.push(row(id, [acc, kw, rouge, faithful, numCheck, expr, fmtOk, fmt(rec.latencyMs, 0), fmt(rec.tokensPerSec), '']));
 
     if (judge) {
       validRows.push({
@@ -111,8 +121,11 @@ function buildModelSection(modelTag, modelLabel, records, ids, excludedId) {
 
   const summary = `**요약(${n}건 기준)**: 정답률 ${fmt(correctPct, 1)}% · 키워드커버리지 평균 ${fmt(avgKw, 1)}% · ROUGE-L 평균 ${fmt(avgRouge, 3)} · 환각률 ${fmt(halluPct, 1)}% · 평균 표현품질 ${fmt(avgExpr, 2)}/5 · 포맷성공률 ${fmt(fmtPct, 1)}% · 평균 Latency ${fmt(avgLatency, 0)}ms · 평균 TPS ${fmt(avgTps, 1)}`;
 
+  const header = `| ID | ${METRIC_COLS.join(' | ')} |\n|---|${METRIC_COLS.map(() => '---').join('|')}|`;
+  const qaSection = `<details>\n<summary>질문 · 생성 답변 (펼치기)</summary>\n\n${qaBlocks.join('\n\n')}\n\n</details>`;
+
   return {
-    section: `### ${modelLabel}\n\n| ID | 질문 | 생성답변 | 답변정확도 | 키워드% | ROUGE-L | RAG충실도 | 숫자/고유명사 | 환각내용 | 표현품질 | 포맷성공 | Latency(ms) | TPS | 사람평가 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n${rows.join('\n')}\n\n${summary}\n**사람 총평**: _(모델 전체에 대한 종합 의견)_`,
+    section: `### ${modelLabel}\n\n${qaSection}\n\n${header}\n${rows.join('\n')}\n\n${summary}\n**사람 총평**: _(모델 전체에 대한 종합 의견)_`,
     stats: { correctPct, halluPct, avgExpr, fmtPct, avgLatency, avgTps, avgKw, avgRouge },
   };
 }
