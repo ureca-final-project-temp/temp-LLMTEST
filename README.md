@@ -64,9 +64,11 @@
 
 전체 9개 항목을 한 번에 다 보지 않고, 아래 순서로 나눠서 진행합니다.
 
-1. **1차: FAQ 답변 생성 라운드 (현재 진행 중)** — 항목 1·2·5·6·7 (답변 정확도 / RAG 충실도 / 표현 품질 / 명령 수행 / 성능)을 난이도별(Easy/Medium/Hard) + RAG 안정성 시나리오로 검증
-2. **2차: 의도 판단 라운드 (데이터 준비 완료)** — 항목 3·4 (FAQ 부재 판단 / 의도 분류). `data/eval_sets/intent_classification.csv`로 진행
-3. **3차: 클러스터 라벨링 라운드 (데이터 준비 완료)** — 항목 9. `data/eval_sets/cluster_labeling.csv`로 진행
+1. **1차: FAQ 답변 생성 라운드** — 항목 1·2·5·6·7 (답변 정확도 / RAG 충실도 / 표현 품질 / 명령 수행 / 성능)
+   - Easy/Medium/Hard: **실행 완료** (9개 모델 × 9케이스씩)
+   - RAG 안정성(Small/Medium/Large): **데이터 준비 완료, 미실행** — 컨텍스트 개수(3/5/10개)별로 문서 3개 분리 (7-2절 참고)
+2. **2차: 의도 판단 라운드 (데이터 준비 완료, 미실행)** — 항목 3·4 (FAQ 부재 판단 / 의도 분류). `data/eval_sets/intent_classification.csv`로 진행
+3. **3차: 클러스터 라벨링 라운드 (데이터 준비 완료, 미실행)** — 항목 9. `data/eval_sets/cluster_labeling.csv`로 진행
 
 항목 8(리소스 요구량)은 모델별 고정 속성이라 별도 라운드 없이 모델 프로필 표에 기록합니다.
 
@@ -81,11 +83,19 @@
 | `data/eval_sets/faq_easy.csv` | Retrieval Easy | 1차 라운드 - Easy 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
 | `data/eval_sets/faq_medium.csv` | Retrieval Medium | 1차 라운드 - Medium 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
 | `data/eval_sets/faq_hard.csv` | Retrieval Hard | 1차 라운드 - Hard 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
-| `data/eval_sets/rag_faithfulness.csv` | RAG 안정성질문 | 항목 2(RAG 충실도) 전용 시나리오 21건 — 무관 FAQ/빈 컨텍스트/모순 FAQ/부분 정보/유사 오답/노이즈/다중 FAQ 조합 (각 3건씩 7개 유형) |
+| `data/eval_sets/rag_stability_small.csv` | RAG 안정성 63건 (Small) | 항목 2(RAG 충실도) 전용 시나리오 21건 — 컨텍스트 2~3개 (7유형×3건) |
+| `data/eval_sets/rag_stability_medium.csv` | RAG 안정성 63건 (Medium) | 항목 2(RAG 충실도) 전용 시나리오 21건 — 컨텍스트 3~5개 (7유형×3건) |
+| `data/eval_sets/rag_stability_large.csv` | RAG 안정성 63건 (Large) | 항목 2(RAG 충실도) 전용 시나리오 21건 — 컨텍스트 10개 (7유형×3건) |
 | `data/eval_sets/cluster_labeling.csv` | 미등록 클러스터링 | 항목 9(클러스터 라벨링) 전용 — 미등록 질의 20건 + 정답 클러스터(4개 그룹) |
-| `data/eval_sets/intent_classification.csv` | (통합) | 항목 3·4용 통합 데이터셋 — 위 5개 파일에서 처리 의도가 라벨된 71건을 하나로 모음 |
+| `data/eval_sets/intent_classification.csv` | (통합) | 항목 3·4용 통합 데이터셋 — 위 7개 파일에서 처리 의도가 라벨된 113건을 하나로 모음 |
 
-### 7-1. Easy/Medium/Hard를 임베딩 시트에서 재활용해도 되는 이유
+### 7-1. RAG 안정성 테스트를 컨텍스트 개수별로 3개 파일로 나눈 이유
+
+처음엔 유형당 3건(21건)으로 시작했는데, 표본이 너무 적어서(유형당 증거 3개뿐) 신뢰하기 어렵다는 문제가 있었습니다 (자세한 논의는 커밋 이력 참고). 그래서 유형당 9건(63건)으로 늘리면서, 동시에 **"실제 서비스에서는 벡터 검색 top-k가 3개일 수도 10개일 수도 있다"**는 점을 반영해 컨텍스트(후보 FAQ) 개수를 3단계(Small=2~3개, Medium=3~5개, Large=10개)로 다양화했습니다. 9개 모델 × 63건이면 한 번에 돌리기엔 부담이 커서, 난이도 단계별로 파일 자체를 3개(`rag_stability_small/medium/large.csv`)로 분리했습니다 — 실행도 독립적으로 가능하고, 결과 문서(`faq_rag_stability_{small,medium,large}_results.md`)도 각각 따로 봅니다.
+
+Easy/Medium/Hard(답변 생성 난이도)와 RAG 안정성 Small/Medium/Large(컨텍스트 개수 난이도)는 **서로 다른 축**입니다 — 헷갈리지 않도록 구분해서 봐야 합니다.
+
+### 7-2. Easy/Medium/Hard를 임베딩 시트에서 재활용해도 되는 이유
 
 Easy/Medium/Hard 시트는 원래 **임베딩 검색 랭킹(Top-1 정답률) 검증용**으로 설계됐습니다. `Acceptable FAQ`, `Hard Negative FAQ` 컬럼이 그 증거이고, 이 컬럼들은 랭킹 문제라 이번 LLM 단독 평가에서는 **사용하지 않습니다**.
 
@@ -234,12 +244,19 @@ scripts/
 │   ├── csv.js          # CSV 파서
 │   ├── ollama.js        # Ollama REST API 클라이언트
 │   ├── metrics.js        # 결정론적 보조 지표 4종
-│   └── judge.js          # 헤드리스 Claude Judge 호출
-├── run_round.js          # 1단계: 모델 호출 → results/raw/faq_<round>.jsonl
-├── score_deterministic.js # 2단계: 보조지표 계산 → *.scored.jsonl
-├── judge_round.js        # 3단계: Judge 채점 → *.judged.jsonl
-└── aggregate_faq_round.js # 4단계: results/faq_<round>_results.md 표 갱신
+│   ├── judge.js          # 헤드리스 Claude Judge 호출 (FAQ 라운드용 + RAG 안정성용)
+│   └── prompts.js        # 모델 목록 + 답변생성 시스템 프롬프트 (공통, README 9-1절)
+├── run_round.js               # FAQ 라운드 1단계: 모델 호출 → results/raw/faq_<round>.jsonl
+├── score_deterministic.js     # FAQ 라운드 2단계: 보조지표 계산 → *.scored.jsonl
+├── judge_round.js             # FAQ 라운드 3단계: Judge 채점 → *.judged.jsonl
+├── aggregate_faq_round.js     # FAQ 라운드 4단계: results/faq_<round>_results.md 표 갱신
+├── run_rag_stability_round.js       # RAG 안정성 1단계: 모델 호출 → results/raw/rag_stability_<tier>.jsonl
+├── score_rag_stability.js           # RAG 안정성 2단계: 숫자/고유명사 검증 → *.scored.jsonl
+├── judge_rag_stability_round.js     # RAG 안정성 3단계: Pass/Fail Judge 채점 → *.judged.jsonl
+└── aggregate_rag_stability_round.js # RAG 안정성 4단계: results/faq_rag_stability_<tier>_results.md 표 갱신
 ```
+
+FAQ 라운드(Easy/Medium/Hard)와 RAG 안정성 라운드(Small/Medium/Large)는 스크립트를 공유하지 않고 **평행한 4단계 파이프라인을 각각 따로** 둡니다 — 이유는 10-5절 참고.
 
 ### 10-1. 각 모듈을 이렇게 만든 기준
 
@@ -249,6 +266,7 @@ scripts/
 | `lib/ollama.js` | `ollama run` CLI 대신 REST API(`/api/chat`)를 직접 호출 | API 응답에 `total_duration`/`load_duration`/`eval_count`/`eval_duration`이 구조화되어 와서 항목7(성능) 지표 계산에 필요. CLI stdout은 이 수치를 안 줌. `format:"json"` 옵션으로 출력을 JSON으로 강제해서 항목6(포맷 성공률) 측정과 직결시킴 |
 | `lib/metrics.js` | 4개 지표 모두 외부 라이브러리 없이 직접 구현 | README 8-1절 원칙(무료·로컬) 그대로 코드화. 키워드 매칭은 정확한 형태소 분석 대신 **부분 문자열(`includes`) 매칭**을 씀 — 한국어 조사 처리를 위해 형태소 분석기(Mecab 등)를 쓰려면 Java/바이너리 설치가 필요해 이번 프로젝트 취지에 안 맞다고 판단. ROUGE-L은 단어 단위 대신 **문자 단위 LCS**로 구현 — 한국어는 띄어쓰기 기준 단어 분리가 신뢰도가 낮아서(조사 결합), 문자 단위가 더 안정적 |
 | `lib/judge.js` | `claude -p`를 헤드리스로 호출, 프롬프트는 **stdin으로 전달** (커맨드라인 인자 아님) | 8절에서 정한 "Judge=Claude Code 헤드리스, Pro 사용량" 그대로 구현. 인자 대신 stdin을 쓴 이유는 한국어·특수문자·긴 텍스트가 섞인 프롬프트를 셸 인자로 넘기면 이스케이프 문제가 생기기 쉬워서. Windows에서 `claude.cmd`(npm 전역 설치 시 생기는 실행 래퍼)를 Node가 직접 실행 못 해서 `shell:true`가 필요했음(Windows Node.js의 알려진 제약) |
+| `lib/prompts.js` | 모델 목록·시스템 프롬프트를 `run_round.js`/`run_rag_stability_round.js`가 공유하는 모듈로 분리 | 원래 `run_round.js` 안에 인라인으로 있던 걸 RAG 안정성 러너를 추가하면서 뽑아냄 — 두 러너가 같은 상수를 각자 복붙하면 나중에 프롬프트를 고칠 때 한쪽만 고치고 잊어버리는 사고가 나기 쉬워서 |
 
 ### 10-2. 실행 중 발견해서 고친 것 (참고용)
 
@@ -264,7 +282,7 @@ scripts/
 - 결측/포맷실패 케이스는 요약 통계 계산에서 제외하고 표에는 "포맷실패"로 표시해 눈에 띄게 남깁니다.
 - 이 스크립트는 `## 모델별 결과` 마커 아래쪽만 다시 씁니다 — 개요/테스트 케이스/채점 기준 설명은 손대지 않고 그대로 둡니다. **표를 손으로 고치면 다음 실행 때 덮어써지니, 표 내용을 바꾸고 싶으면 스크립트나 원본 데이터를 고치세요** (단, `사람평가`/`사람 총평` 칸은 스크립트가 항상 빈 칸으로 두므로 자유롭게 손으로 채워도 덮어써지지 않습니다).
 
-### 10-4. 실행 방법
+### 10-4. 실행 방법 — FAQ 라운드 (Easy/Medium/Hard)
 
 ```
 node scripts/run_round.js easy              # 1. 모델 호출
@@ -274,14 +292,39 @@ node scripts/aggregate_faq_round.js easy    # 4. 결과 문서 갱신
 ```
 `easy`를 `medium`/`hard`로 바꾸면 해당 라운드로 동일하게 실행됩니다.
 
+### 10-5. RAG 안정성 전용 파이프라인 (Small/Medium/Large)
+
+FAQ 라운드 스크립트를 그대로 재사용하지 못하고 **별도 스크립트 세트를 만든 이유**는 데이터 구조와 채점 기준이 근본적으로 다르기 때문입니다.
+
+| 구분 | FAQ 라운드 (Easy/Medium/Hard) | RAG 안정성 (Small/Medium/Large) |
+|---|---|---|
+| 컨텍스트 생성 | `Primary GT` FAQ ID로 `data/faq.csv`를 조회해서 원문 조립 | `rag_stability_*.csv`의 `제공 Context` 컬럼을 **그대로 사용** (이미 완성된 텍스트 — 무관 FAQ 설명, `EMPTY`, `A:.../B:...` 모순 등 형식이 케이스마다 다름) |
+| 정답 판정 | 정답 FAQ 원문과 **대조**해서 1~5점 채점 (`answer_accuracy`) | 케이스마다 다른 **"기대 행동"/"실패 조건"**을 지켰는지 **Pass/Fail** 채점 (정답 텍스트 자체가 없음) |
+| 결정론적 보조지표 | 키워드 커버리지 + ROUGE-L + 숫자검증 3종 (정답 텍스트와 비교) | 숫자/고유명사 검증만 (비교할 정답 텍스트가 없어서 키워드·ROUGE는 적용 불가) |
+| Judge 프롬프트 | `buildJudgePrompt` — 고정 루브릭(정확도/충실도/표현품질) | `buildRagStabilityJudgePrompt` — **케이스별 가변 루브릭** (그 케이스의 기대 행동·실패 조건을 프롬프트에 그대로 삽입) |
+
+실행 방법은 FAQ 라운드와 동일한 4단계 패턴입니다.
+
+```
+node scripts/run_rag_stability_round.js small              # 1. 모델 호출
+node scripts/score_rag_stability.js small                  # 2. 숫자/고유명사 검증
+node scripts/judge_rag_stability_round.js small             # 3. Pass/Fail Judge 채점
+node scripts/aggregate_rag_stability_round.js small          # 4. 결과 문서 갱신
+```
+`small`을 `medium`/`large`로 바꾸면 해당 난이도로 동일하게 실행됩니다. 세 티어는 서로 완전히 독립된 데이터/결과 파일이라 순서 상관없이, 원하는 것만 골라 돌려도 됩니다.
+
+**검증**: `gemma3:270m`으로 EC-01(빈 컨텍스트) 1건을 실제로 돌려 파이프라인 전체(모델 호출 → Judge 채점)를 확인했습니다. 모델이 출력 스키마를 그대로 복사한 망가진 답변을 냈는데, Judge가 이를 정확히 `pass:false`로 판정하고 이유까지 명확히 설명했습니다.
+
 ## 11. 결과 문서
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
 | [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 | ✅ 실행 완료 |
-| [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 | 미실행 |
-| [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 | 미실행 |
-| [`results/faq_rag_stability_results.md`](results/faq_rag_stability_results.md) | RAG 안정성 시나리오(무관 FAQ/모순 FAQ/빈 컨텍스트 등) 모델별 결과 | 미실행 |
+| [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 | ✅ 실행 완료 |
+| [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 | ✅ 실행 완료 |
+| [`results/faq_rag_stability_small_results.md`](results/faq_rag_stability_small_results.md) | RAG 안정성(컨텍스트 2~3개) 모델별 결과 | 미실행 |
+| [`results/faq_rag_stability_medium_results.md`](results/faq_rag_stability_medium_results.md) | RAG 안정성(컨텍스트 3~5개) 모델별 결과 | 미실행 |
+| [`results/faq_rag_stability_large_results.md`](results/faq_rag_stability_large_results.md) | RAG 안정성(컨텍스트 10개) 모델별 결과 | 미실행 |
 | [`results/intent_classification_results.md`](results/intent_classification_results.md) | 의도 분류(항목 3·4) 모델별 결과 | 미실행 |
 | [`results/cluster_labeling_results.md`](results/cluster_labeling_results.md) | 클러스터 라벨링(항목 9) 모델별 결과 | 미실행 |
 
@@ -292,26 +335,34 @@ LLM_Test/
 ├── README.md
 ├── data/
 │   ├── raw/
-│   │   └── EmbeddingTestFAQ.xlsx        # 원본 엑셀
+│   │   ├── EmbeddingTestFAQ.xlsx               # 원본 엑셀 (FAQ/Easy/Medium/Hard/클러스터링/Intent가이드)
+│   │   └── faq_rag_stability_expanded_63.xlsx  # RAG 안정성 63건 원본 엑셀
 │   ├── faq.csv                          # 마스터 FAQ (100건)
 │   ├── intent_guide.csv                 # 의도 카테고리 정의 (참고용)
 │   └── eval_sets/
 │       ├── faq_easy.csv
 │       ├── faq_medium.csv
 │       ├── faq_hard.csv
-│       ├── rag_faithfulness.csv
+│       ├── rag_stability_small.csv      # 컨텍스트 2~3개, 7유형×3건
+│       ├── rag_stability_medium.csv     # 컨텍스트 3~5개, 7유형×3건
+│       ├── rag_stability_large.csv      # 컨텍스트 10개, 7유형×3건
 │       ├── cluster_labeling.csv
-│       └── intent_classification.csv    # 위 5개 파일 통합
+│       └── intent_classification.csv    # 위 7개 파일 통합 (113건)
 ├── scripts/
 │   ├── lib/
 │   │   ├── csv.js
 │   │   ├── ollama.js
 │   │   ├── metrics.js
-│   │   └── judge.js
+│   │   ├── judge.js
+│   │   └── prompts.js
 │   ├── run_round.js
 │   ├── score_deterministic.js
 │   ├── judge_round.js
-│   └── aggregate_faq_round.js
+│   ├── aggregate_faq_round.js
+│   ├── run_rag_stability_round.js
+│   ├── score_rag_stability.js
+│   ├── judge_rag_stability_round.js
+│   └── aggregate_rag_stability_round.js
 └── results/
     ├── raw/                              # 스크립트 중간 산출물 (jsonl), 사람이 직접 편집하지 않음
     │   ├── faq_easy.jsonl
@@ -320,7 +371,9 @@ LLM_Test/
     ├── faq_easy_results.md
     ├── faq_medium_results.md
     ├── faq_hard_results.md
-    ├── faq_rag_stability_results.md
+    ├── faq_rag_stability_small_results.md
+    ├── faq_rag_stability_medium_results.md
+    ├── faq_rag_stability_large_results.md
     ├── intent_classification_results.md
     └── cluster_labeling_results.md
 ```
@@ -330,9 +383,11 @@ LLM_Test/
 - [x] Ollama에 9개 후보 모델 설치 (`gemma3:12b`는 계획에 없던 추가 설치, 이번 테스트 대상에서는 제외)
 - [x] 프롬프트 템플릿 확정 (답변 생성/의도 분류/클러스터 라벨링 — 9절 참고)
 - [x] 결정론적 보조 지표 계산 스크립트 작성 (10절 참고)
-- [x] Easy 라운드 9개 모델 실행 및 결과 문서 채우기
-- [ ] Medium → Hard → RAG 안정성 순으로 9개 모델 실행 및 결과 문서 채우기
+- [x] Easy → Medium → Hard 9개 모델 실행 및 결과 문서 채우기
+- [x] RAG 안정성 케이스 유형당 3건→9건(63건)으로 확대, 컨텍스트 개수(3/5/10) 난이도 분리 — 데이터만 준비, 미실행
+- [x] RAG 안정성 전용 4단계 파이프라인 작성 (`run_rag_stability_round.js` 등 4종 — 10-5절 참고), 1건 스모크 테스트로 동작 확인
+- [ ] RAG 안정성 Small → Medium → Large 순으로 9개 모델 실행 및 결과 문서 채우기 (스크립트 준비 완료, 실행만 남음)
 - [ ] 사람 채점 calibration set 소량 확보 후 Judge 신뢰도 검증 추가
 - [ ] 의도 판단 라운드(항목 3·4) 9개 모델 실행 및 결과 문서 채우기
 - [ ] 클러스터 라벨링 라운드(항목 9) 9개 모델 실행 및 결과 문서 채우기
-- [ ] Easy 라운드 `사람평가`/`사람 총평` 칸 검토 및 채우기
+- [ ] Easy/Medium/Hard `사람평가`/`사람 총평` 칸 검토 및 채우기
