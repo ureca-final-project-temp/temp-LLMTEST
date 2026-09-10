@@ -11,21 +11,15 @@
 3. **자동화 파이프라인 구축** — 모델 호출(Ollama API) → 결정론적 보조지표 → Judge 채점(Claude Code 헤드리스) → 결과 문서 자동 집계, 4단계 스크립트 (README 10절)
 4. **FAQ 답변 생성 라운드 (Easy/Medium/Hard) 전부 실행 완료** ✅ — 각 9개 모델 × 9케이스, 결과는 `results/faq_{easy,medium,hard}_results.md`
 5. **RAG 안정성 테스트를 유형당 3건(21건)→9건(63건)으로 확대**, 컨텍스트 개수(3/5/10개) 기준 Small/Medium/Large 3개 파일로 분리, 전용 파이프라인 스크립트 작성
-6. **RAG 안정성 Small/Medium 라운드 실행 완료** ✅ — `results/faq_rag_stability_{small,medium}_results.md`
+6. **RAG 안정성 Small/Medium/Large 라운드 전부 실행 완료** ✅ — `results/faq_rag_stability_{small,medium,large}_results.md` — **1차 라운드(FAQ 답변 생성 + RAG 안정성) 전체 완주**
 
 ## 다음에 할 일 (우선순위 순)
 
-1. **RAG 안정성 Large 라운드 실행**
-   ```
-   node scripts/run_rag_stability_round.js large
-   node scripts/score_rag_stability.js large
-   node scripts/judge_rag_stability_round.js large
-   node scripts/aggregate_rag_stability_round.js large
-   ```
-2. **의도 분류 라운드 (항목 3·4)** — 데이터(`data/eval_sets/intent_classification.csv`, 113건)는 준비됐지만 **전용 러너 스크립트가 아직 없음** (RAG 안정성처럼 새로 만들어야 함 — FAQ 컨텍스트 없이 질문만 주고 3-way 분류, 채점은 결정론적 Confusion Matrix라 Judge 불필요)
-3. **클러스터 라벨링 라운드 (항목 9)** — 데이터(`data/eval_sets/cluster_labeling.csv`, 20건→4그룹)는 준비됐지만 **전용 러너 스크립트가 아직 없음** (그룹별 라벨링 프롬프트, Judge로 라벨 정확도 채점)
-4. 사람 채점 calibration set 확보 후 Judge 신뢰도 검증
-5. Easy/Medium/Hard/RAG안정성 결과 문서의 `사람평가`/`사람 총평` 칸 검토
+1. **의도 분류 라운드 (항목 3·4)** — 데이터(`data/eval_sets/intent_classification.csv`, 113건)는 준비됐지만 **전용 러너 스크립트가 아직 없음** (RAG 안정성처럼 새로 만들어야 함 — FAQ 컨텍스트 없이 질문만 주고 3-way 분류, 채점은 결정론적 Confusion Matrix라 Judge 불필요)
+2. **클러스터 라벨링 라운드 (항목 9)** — 데이터(`data/eval_sets/cluster_labeling.csv`, 20건→4그룹)는 준비됐지만 **전용 러너 스크립트가 아직 없음** (그룹별 라벨링 프롬프트, Judge로 라벨 정확도 채점)
+3. 사람 채점 calibration set 확보 후 Judge 신뢰도 검증
+4. Easy/Medium/Hard/RAG안정성 결과 문서의 `사람평가`/`사람 총평` 칸 검토
+5. RAG 안정성 3개 티어(Small/Medium/Large) 전체 결과를 놓고 **최종 모델 후보 압축** (아래 요약 참고 — Qwen3 4B/8B, Gemma3 4B가 유력)
 
 ## 지금까지 나온 핵심 결과 (요약)
 
@@ -33,8 +27,13 @@
 - **Gemma3 4B**가 정확도-속도 밸런스 1순위 후보로 보임 (Hard 100% 정답률, Qwen3 4B보다 10배 빠름)
 - **EXAONE 3.5(2.4B/7.8B)는 난이도가 올라갈수록 환각률이 계속 악화** (Hard에서 67%까지)
 - Gemma3 270M/1B는 Hard에서 정답률 20%대로 사실상 실사용 어려움
-- **반전**: FAQ 라운드에서 최고였던 Qwen3 0.6B가 RAG 안정성에서는 Small 14.3% → Medium 25.0%로 계속 하위권 — "단순 재진술"과 "무관/모순 컨텍스트 저항"은 완전히 다른 능력
-- **RAG 안정성 Small/Medium 모두 Qwen3 8B가 1위** (85.7%/81.0%), **Gemma3 4B가 근소한 2위권** (76.2%/71.4%) — 이 둘이 유력 후보로 굳어지는 중. Gemma3 270M/1B는 Medium에서 0~10%대로 사실상 전멸
+- **반전**: FAQ 라운드에서 최고였던 Qwen3 0.6B가 RAG 안정성 전 티어(Small 14.3%/Medium 25.0%/Large 14.3%)에서 계속 하위권 — "단순 재진술"과 "무관/모순 컨텍스트 저항"은 완전히 다른 능력
+- **RAG 안정성 적절 대응률 (Small/Medium/Large)**:
+  - Qwen3 4B: 71.4% / 76.2% / **61.9%(1위)**
+  - Qwen3 8B: **85.7%(1위)** / **81.0%(1위)** / 57.1%
+  - Gemma3 4B: 76.2% / 71.4% / 57.1%
+  - Gemma3 270M/1B: 전 티어 0~33%대로 사실상 전멸
+  - → **컨텍스트가 10개까지 늘어나면(Large) Qwen3 8B도 무너지고 Qwen3 4B가 역전** — "속도만 느릴 뿐 정확도는 안 흔들리는" Qwen3 4B와, "작고 빠르지만 Large에서 약해지는" Qwen3 8B/Gemma3 4B 사이의 트레이드오프가 최종 후보 압축의 핵심 포인트
 
 ## 되짚어볼 것 (다음 세션에서 판단 근거로 참고)
 
