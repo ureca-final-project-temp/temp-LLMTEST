@@ -36,6 +36,15 @@ function loadRecords(roundName) {
   return fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 }
 
+// rec.contextBlock holds the exact FAQ text shown to the model, e.g.
+// "FAQ-028: 카테고리 - Q: 질문 A: 정답 답변" (one line per FAQ ID, "\n"-joined if several).
+// Pull out just the "A: ..." portion(s) as the gold answer to show alongside the LLM's answer.
+function goldAnswerFromContextBlock(contextBlock) {
+  if (!contextBlock) return '(컨텍스트 없음)';
+  const matches = Array.from(contextBlock.matchAll(/A:\s*([^\n]+)/g)).map((m) => m[1].trim());
+  return matches.length ? matches.join(' / ') : contextBlock;
+}
+
 function fmt(n, digits = 1) {
   if (n === null || n === undefined || Number.isNaN(n)) return '-';
   return Number(n).toFixed(digits);
@@ -73,13 +82,20 @@ function buildModelSection(modelTag, modelLabel, records, ids, excludedId) {
       continue;
     }
     if (!rec.ok || !rec.formatValid || !rec.parsed) {
-      qaBlocks.push(`**${id}** — 포맷 실패\n> **Q.** ${rec.query}\n>\n> **A.** _(JSON 파싱 실패: ${(rec.rawContent || rec.error || '').slice(0, 200)})_`);
+      qaBlocks.push(`**${id}** — 포맷 실패\n> **Q.** ${rec.query}\n>\n> **정답.** ${goldAnswerFromContextBlock(rec.contextBlock)}\n>\n> **LLM답변.** _(JSON 파싱 실패: ${(rec.rawContent || rec.error || '').slice(0, 200)})_`);
       rows.push(row(id, ['포맷실패', '-', '-', '-', '-', '-', 'X', fmt(rec.latencyMs, 0), fmt(rec.tokensPerSec), '']));
       continue;
     }
     const det = rec.det || {};
     const judge = rec.judge && rec.judge.ok ? rec.judge.scores : null;
-    const qaLines = [`**${id}**`, `> **Q.** ${rec.query}`, `>`, `> **A.** ${rec.parsed.answer}`];
+    const qaLines = [
+      `**${id}**`,
+      `> **Q.** ${rec.query}`,
+      `>`,
+      `> **정답.** ${goldAnswerFromContextBlock(rec.contextBlock)}`,
+      `>`,
+      `> **LLM답변.** ${rec.parsed.answer}`,
+    ];
     if (judge && !judge.faithful && judge.hallucination) qaLines.push(`>`, `> ⚠️ 환각: ${judge.hallucination}`);
     if (det.numberVerification && !det.numberVerification.pass) qaLines.push(`>`, `> ⚠️ 미검증 수치: ${det.numberVerification.unverified.join(', ')}`);
     qaBlocks.push(qaLines.join('\n'));
