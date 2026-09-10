@@ -46,25 +46,27 @@
 
 | # | 평가 영역 | 핵심 질문 | 측정 방법 | 채점 방식 |
 |---|---|---|---|---|
-| 1 | 답변 정확도 | FAQ 내용을 정확히 이해하고 답하는가? | 정답률, LLM Judge, 수동평가 | Judge 필요 |
-| 2 | RAG 충실도 | 주어진 FAQ만 근거로 답하는가? | Faithfulness, Hallucination Rate | Judge 필요 |
+| 1 | 답변 정확도 | FAQ 내용을 정확히 이해하고 답하는가? | LLM Judge + 키워드 커버리지 + ROUGE-L, 수동평가 | Judge + 결정론적 보조지표 |
+| 2 | RAG 충실도 | 주어진 FAQ만 근거로 답하는가? | Faithfulness(Judge), Hallucination Rate, 숫자/고유명사 검증 | Judge + 결정론적 보조지표 |
 | 3 | FAQ 부재 판단 | FAQ에 없는 질문에 억지로 답하지 않는가? | Precision / Recall / F1 | 결정론적 |
-| 4 | 의도 분류 | 사용자 질문의 의도(위치/DB조회/FAQ)를 정확히 분류하는가? | Accuracy, Macro-F1 | 결정론적 |
+| 4 | 의도 분류 | 사용자 질문의 의도(`FAQ_RAG`/`MAP_API`/`UNREGISTERED`)를 정확히 분류하는가? | Accuracy, Macro-F1 | 결정론적 |
 | 5 | 표현 품질 | 자연스러운 한국어 상담 답변인가? | 자연스러움, 명확성, 친절성 | Judge 필요 |
 | 6 | 명령 수행 능력 | 지정 형식으로 안정적으로 출력하는가? | Format Success Rate | 결정론적 |
 | 7 | 성능 | 실제 채팅 서비스에 충분히 빠른가? | TTFT, TPS, 전체 Latency | 결정론적 (계측) |
 | 8 | 리소스 요구량 | 서비스 규모에서 감당 가능한가? | VRAM/RAM 사용량, 모델 크기·양자화 | 결정론적 (계측) |
-| 9 | 클러스터 라벨링 | FAQ 부재 질문 묶음에 적절한 라벨/요약을 붙이는가? | 라벨 정확도, 라벨 환각 여부, 라벨 구분력 | Judge 필요 |
+| 9 | 클러스터 라벨링 | FAQ 부재 질문 묶음에 적절한 라벨/요약을 붙이는가? | 라벨 정확도(Judge), 라벨 환각 여부, 문자열 유사도 기반 라벨 구분력 | Judge + 결정론적 보조지표 |
 
 클러스터링(그룹 나누기) 자체는 임베딩이 담당하고, LLM은 이미 만들어진 그룹에 라벨/요약만 붙이는 역할로 한정합니다.
+
+> 항목 4의 의도 카테고리는 `data/intent_guide.csv` 기준입니다: `FAQ_RAG`(등록 FAQ로 답변), `MAP_API`(위치·지도 데이터 필요), `UNREGISTERED`(FAQ 근거 부족, 답변 보류), `UNREGISTERED_CLUSTERING`(미등록 질의 중 클러스터링 대상으로 수집). 분류 채점 시 `UNREGISTERED_CLUSTERING`은 `UNREGISTERED`와 같은 클래스로 취급합니다(3-way 분류: FAQ_RAG/MAP_API/UNREGISTERED). `_CLUSTERING` 접미사는 해당 건이 항목 9(클러스터 라벨링) 데이터로도 쓰인다는 태그일 뿐입니다.
 
 ## 6. 진행 순서
 
 전체 9개 항목을 한 번에 다 보지 않고, 아래 순서로 나눠서 진행합니다.
 
-1. **1차: FAQ 답변 생성 라운드 (현재 진행 중)** — 항목 1·2·5·6·7 (답변 정확도 / RAG 충실도 / 표현 품질 / 명령 수행 / 성능)을 난이도별(Easy/Medium/Hard)로 검증
-2. **2차: 의도 판단 라운드 (추후 진행)** — 항목 3·4 (FAQ 부재 판단 / 의도 분류)
-3. **3차: 클러스터 라벨링 라운드 (추후 진행)** — 항목 9. 정답 클러스터 데이터는 별도 제공 예정
+1. **1차: FAQ 답변 생성 라운드 (현재 진행 중)** — 항목 1·2·5·6·7 (답변 정확도 / RAG 충실도 / 표현 품질 / 명령 수행 / 성능)을 난이도별(Easy/Medium/Hard) + RAG 안정성 시나리오로 검증
+2. **2차: 의도 판단 라운드 (데이터 준비 완료)** — 항목 3·4 (FAQ 부재 판단 / 의도 분류). `data/eval_sets/intent_classification.csv`로 진행
+3. **3차: 클러스터 라벨링 라운드 (데이터 준비 완료)** — 항목 9. `data/eval_sets/cluster_labeling.csv`로 진행
 
 항목 8(리소스 요구량)은 모델별 고정 속성이라 별도 라운드 없이 모델 프로필 표에 기록합니다.
 
@@ -74,13 +76,25 @@
 
 | 파일 | 원본 시트 | 용도 |
 |---|---|---|
-| `data/faq.csv` | FAQ | 마스터 FAQ 지식베이스 (100건: ID/Category/Question/Answer) |
-| `data/eval_sets/faq_easy.csv` | Retrieval Easy | 1차 라운드 - Easy 테스트 케이스 10건 |
-| `data/eval_sets/faq_medium.csv` | Retrieval Medium | 1차 라운드 - Medium 테스트 케이스 10건 |
-| `data/eval_sets/faq_hard.csv` | Retrieval Hard | 1차 라운드 - Hard 테스트 케이스 10건 |
-| `data/eval_sets/rag_faithfulness.csv` | RAG 안정성질문 | 항목 2(RAG 충실도) 전용 시나리오 10건 — 무관 FAQ, 모순 FAQ, 빈 컨텍스트 등. 1차 라운드 심화 검증에 활용 예정 |
+| `data/faq.csv` | FAQ | 마스터 FAQ 지식베이스 (100건: ID/카테고리/질문/답변/권장 처리 의도/세부 의도) |
+| `data/intent_guide.csv` | Intent 가이드 | 의도 카테고리 4종 정의 및 판정 기준 (테스트 데이터 아님, 참고용) |
+| `data/eval_sets/faq_easy.csv` | Retrieval Easy | 1차 라운드 - Easy 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
+| `data/eval_sets/faq_medium.csv` | Retrieval Medium | 1차 라운드 - Medium 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
+| `data/eval_sets/faq_hard.csv` | Retrieval Hard | 1차 라운드 - Hard 테스트 케이스 10건 (FAQ_RAG 9 + MAP_API 1) |
+| `data/eval_sets/rag_faithfulness.csv` | RAG 안정성질문 | 항목 2(RAG 충실도) 전용 시나리오 21건 — 무관 FAQ/빈 컨텍스트/모순 FAQ/부분 정보/유사 오답/노이즈/다중 FAQ 조합 (각 3건씩 7개 유형) |
+| `data/eval_sets/cluster_labeling.csv` | 미등록 클러스터링 | 항목 9(클러스터 라벨링) 전용 — 미등록 질의 20건 + 정답 클러스터(4개 그룹) |
+| `data/eval_sets/intent_classification.csv` | (통합) | 항목 3·4용 통합 데이터셋 — 위 5개 파일에서 처리 의도가 라벨된 71건을 하나로 모음 |
 
-> Easy/Medium/Hard 시트는 원래 임베딩 검색 랭킹(Top-1 정답률) 검증용으로 설계됐습니다. 이 레포에서는 "임베딩이 정답 FAQ를 이미 올바르게 찾아줬다"고 가정하고, **User Query + Ground Truth FAQ 원문을 LLM에 그대로 제공한 뒤 생성한 답변의 품질만 평가**하는 방식으로 재활용합니다. 랭킹 자체(Acceptable FAQ, Hard Negative FAQ 컬럼)는 이번 LLM 단독 평가 범위에는 사용하지 않습니다.
+### 7-1. Easy/Medium/Hard를 임베딩 시트에서 재활용해도 되는 이유
+
+Easy/Medium/Hard 시트는 원래 **임베딩 검색 랭킹(Top-1 정답률) 검증용**으로 설계됐습니다. `Acceptable FAQ`, `Hard Negative FAQ` 컬럼이 그 증거이고, 이 컬럼들은 랭킹 문제라 이번 LLM 단독 평가에서는 **사용하지 않습니다**.
+
+이 레포에서는 "임베딩이 정답 FAQ를 이미 올바르게 찾아줬다"고 가정하고, **User Query + Ground Truth FAQ 원문만 LLM에 제공한 뒤 생성한 답변의 품질만 평가**하는 방식으로 재활용합니다. 원래 설계 목적(임베딩이 헷갈려하는 정도)은 안 쓰지만, 난이도가 올라가면서 같이 딸려오는 두 가지 특성이 우연히 **LLM 생성 난이도**로도 그대로 유효합니다.
+
+- **표현 방식**: Easy는 FAQ 문구와 거의 겹치는 직접 표현, Medium/Hard는 구어체·상황 묘사·동의어로 에둘러 말함 → LLM이 간접적인 질문 의도를 얼마나 잘 이해하는지 테스트 (순수 LLM 능력)
+- **경쟁 FAQ(주의分산 요소)**: Hard로 갈수록 한 질문 안에 여러 연관 개념(분실+회선정지, 번호이동+기기변경, 로밍+Wi-Fi 등)이 섞여 있어 비슷한 FAQ로 오답할 여지가 큼 → 실제로 물어본 것에 정확히 대응하는 FAQ 하나에 집중해서 답하는 능력을 테스트 (RAG 검색과 무관한 순수 생성 능력)
+
+즉 "임베딩이 어려워하는 이유"와 "LLM이 어려워하는 이유"는 다르지만, 난이도 라벨(Easy/Medium/Hard) 자체는 두 목적 모두에 우연히 들어맞아서 그대로 재사용합니다.
 
 ## 8. Judge (채점자) 구성
 
@@ -89,7 +103,20 @@
 - 절대 점수보다 **정답(Ground Truth FAQ 원문) 대조 채점**을 우선
 - 환각 여부는 점수에 섞지 않고 **환각률(%)로 별도 집계** — 특정 임계치를 넘으면 다른 점수와 무관하게 "부적합" 표시
 
-### 8-1. 사람(운영자) 평가 병행
+### 8-1. 결정론적 보조 지표 (무료, 규칙 기반)
+
+LLM Judge 하나에만 판단을 맡기지 않고, 비용 없이 재현 가능한 규칙 기반 지표를 **같이** 계산해서 나란히 표기합니다. 임베딩·API가 필요 없는 것만 채택했습니다.
+
+| 지표 | 적용 항목 | 계산 방식 |
+|---|---|---|
+| 키워드/사실 커버리지 (%) | 답변 정확도 | 정답 FAQ 답변에서 핵심 명사·숫자·조건을 미리 추출해두고, 생성 답변에 몇 %가 포함됐는지 문자열 매칭으로 계산 |
+| n-gram 중복도 (ROUGE-L) | 답변 정확도 | 정답 답변과 생성 답변의 최장 공통 부분열 기반 재현율/정밀도 |
+| 숫자/고유명사 존재 검증 | RAG 충실도 | 생성 답변에 등장하는 모든 숫자·금액·고유명사가 제공된 FAQ/컨텍스트 원문에 실제로 있는지 정규식 대조. 없으면 환각 후보로 플래그 |
+| 문자열 중복/유사도 체크 | 클러스터 라벨 구분력 | 모델이 생성한 클러스터 라벨들끼리 Jaccard 유사도·편집 거리를 계산해, 서로 다른 클러스터에 지나치게 비슷한 라벨이 붙었는지 확인 |
+
+이 지표들은 패러프레이즈(같은 뜻, 다른 표현)를 놓칠 수 있다는 한계가 있어 **LLM Judge/사람 평가를 대체하지 않고 보조 신호로만 사용**합니다. 임베딩 기반 의미 유사도는 원래 "임베딩 제외" 원칙과 결이 달라 이번엔 채택하지 않았습니다.
+
+### 8-2. 사람(운영자) 평가 병행
 
 LLM Judge가 채점하는 항목(1·2·5·9)은 **사람이 개별 건마다 별도로 직접 판단**합니다. 이건 소량 calibration set으로 Judge를 검증하는 것과는 별개로, **모든 테스트 케이스 하나하나에 대해** 결과 문서에 사람 의견을 남길 수 있는 칸을 둡니다.
 
@@ -104,8 +131,9 @@ LLM Judge가 채점하는 항목(1·2·5·9)은 **사람이 개별 건마다 별
 | [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 |
 | [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 |
 | [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 |
-
-의도 판단(항목 3·4)과 클러스터 라벨링(항목 9) 결과는 해당 라운드 진행 시 별도 문서로 추가합니다.
+| [`results/faq_rag_stability_results.md`](results/faq_rag_stability_results.md) | RAG 안정성 시나리오(무관 FAQ/모순 FAQ/빈 컨텍스트 등) 모델별 결과 |
+| [`results/intent_classification_results.md`](results/intent_classification_results.md) | 의도 분류(항목 3·4) 모델별 결과 |
+| [`results/cluster_labeling_results.md`](results/cluster_labeling_results.md) | 클러스터 라벨링(항목 9) 모델별 결과 |
 
 ## 10. 리포지토리 구조
 
@@ -116,22 +144,29 @@ LLM_Test/
 │   ├── raw/
 │   │   └── EmbeddingTestFAQ.xlsx        # 원본 엑셀
 │   ├── faq.csv                          # 마스터 FAQ (100건)
+│   ├── intent_guide.csv                 # 의도 카테고리 정의 (참고용)
 │   └── eval_sets/
 │       ├── faq_easy.csv
 │       ├── faq_medium.csv
 │       ├── faq_hard.csv
-│       └── rag_faithfulness.csv
+│       ├── rag_faithfulness.csv
+│       ├── cluster_labeling.csv
+│       └── intent_classification.csv    # 위 5개 파일 통합
 └── results/
     ├── faq_easy_results.md
     ├── faq_medium_results.md
-    └── faq_hard_results.md
+    ├── faq_hard_results.md
+    ├── faq_rag_stability_results.md
+    ├── intent_classification_results.md
+    └── cluster_labeling_results.md
 ```
 
 ## 11. TODO
 
 - [ ] Ollama에 9개 후보 모델 설치 및 워밍업(모델 로드 시간 분리 측정)
 - [ ] 답변 생성 프롬프트 템플릿 확정 (출력 포맷 포함 — 항목 6 측정 기준과 직결)
-- [ ] Easy → Medium → Hard 순으로 9개 모델 실행 및 결과 문서 채우기
+- [ ] 결정론적 보조 지표 계산 스크립트 작성 (키워드 커버리지, ROUGE-L, 숫자/고유명사 검증, 라벨 문자열 유사도)
+- [ ] Easy → Medium → Hard → RAG 안정성 순으로 9개 모델 실행 및 결과 문서 채우기
 - [ ] 사람 채점 calibration set 소량 확보 후 Judge 신뢰도 검증 추가
-- [ ] 의도 판단 라운드용 데이터셋 준비 (위치/DB조회/FAQ 3-way 라벨)
-- [ ] 클러스터 라벨링 라운드용 정답 클러스터 데이터 준비 (추후 별도 제공 예정)
+- [ ] 의도 판단 라운드(항목 3·4) 9개 모델 실행 및 결과 문서 채우기
+- [ ] 클러스터 라벨링 라운드(항목 9) 9개 모델 실행 및 결과 문서 채우기
