@@ -2,7 +2,7 @@
 
 // Shared config used by all round runners (README 9절 프롬프트 템플릿).
 
-const MODELS = [
+const DEFAULT_MODELS = [
   'qwen3:0.6b',
   'qwen3:1.7b',
   'qwen3:4b',
@@ -13,6 +13,12 @@ const MODELS = [
   'gemma3:1b',
   'gemma3:4b',
 ];
+
+// Set LLM_TEST_MODELS to a comma-separated list to run a controlled subset.
+// Keeping the default preserves the original nine-model workflow.
+const MODELS = (process.env.LLM_TEST_MODELS
+  ? process.env.LLM_TEST_MODELS.split(',').map((model) => model.trim()).filter(Boolean)
+  : DEFAULT_MODELS);
 
 // README 9-1: FAQ 답변 생성 (Easy/Medium/Hard + RAG 안정성 공통)
 const ANSWER_GEN_SYSTEM_PROMPT = `당신은 통신사 고객센터 챗봇입니다. 아래 제공된 FAQ 내용만 근거로 사용자 질문에 친절하고 자연스러운 한국어 존댓말로 답변하세요.

@@ -13,7 +13,7 @@ const ROOT = path.resolve(__dirname, '..');
 const RAW_DIR = path.join(ROOT, 'results', 'raw');
 const RESULTS_DIR = path.join(ROOT, 'results');
 
-const MODELS = [
+const DEFAULT_MODELS = [
   { tag: 'qwen3:0.6b', label: 'Qwen3 0.6B (`qwen3:0.6b`)' },
   { tag: 'qwen3:1.7b', label: 'Qwen3 1.7B (`qwen3:1.7b`)' },
   { tag: 'qwen3:4b', label: 'Qwen3 4B (`qwen3:4b`)' },
@@ -24,6 +24,13 @@ const MODELS = [
   { tag: 'gemma3:1b', label: 'Gemma3 1B (`gemma3:1b`)' },
   { tag: 'gemma3:4b', label: 'Gemma3 4B (`gemma3:4b`)' },
 ];
+
+const MODELS = (process.env.LLM_TEST_MODELS
+  ? process.env.LLM_TEST_MODELS.split(',').map((tag) => ({
+      tag: tag.trim(),
+      label: `${tag.trim()} (\`${tag.trim()}\`)`,
+    })).filter((m) => m.tag)
+  : DEFAULT_MODELS);
 
 const ROUND_IDS = {
   easy: { prefix: 'E', excluded: 'E09', all: ['E01', 'E02', 'E03', 'E04', 'E05', 'E06', 'E07', 'E08', 'E09', 'E10'] },
@@ -168,7 +175,8 @@ function main() {
   const modelSectionsText = sections.join('\n\n---\n\n');
   const comparisonTable = `| 모델 | 정답률 | 키워드커버리지 | ROUGE-L | 환각률 | 표현품질 | 포맷성공률 | 평균 Latency(ms) | 평균 TPS |\n|---|---|---|---|---|---|---|---|---|\n${comparisonRows.join('\n')}`;
 
-  const mdPath = path.join(RESULTS_DIR, `faq_${roundName}_results.md`);
+  const resultSuffix = process.env.RESULT_SUFFIX || '';
+  const mdPath = path.join(RESULTS_DIR, `faq_${roundName}${resultSuffix}_results.md`);
   const original = fs.readFileSync(mdPath, 'utf8');
   const marker = '## 모델별 결과';
   // Match the marker only as a heading line (start of line), not an inline backtick mention

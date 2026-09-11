@@ -34,7 +34,7 @@ async function main() {
       continue;
     }
     process.stdout.write(`  [${done + 1}/${lines.length}] ${rec.id} x ${rec.model} ... `);
-    const judge = judgeRagStability({
+    const judge = await judgeRagStability({
       userQuery: rec.query,
       contextBlock: rec.contextBlock,
       answer: rec.parsed.answer,

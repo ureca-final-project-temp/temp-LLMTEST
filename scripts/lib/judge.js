@@ -1,9 +1,5 @@
 'use strict';
 
-const { spawnSync } = require('child_process');
-
-const CLAUDE_BIN = process.platform === 'win32' ? 'claude.cmd' : 'claude';
-
 function buildJudgePrompt({ faqQuestion, faqAnswer, userQuery, answer }) {
   return `당신은 통신사 FAQ 챗봇 답변을 채점하는 평가자입니다. 아래 정답 FAQ와 챗봇이 생성한 답변을 비교해서 채점하세요.
 
@@ -62,37 +58,58 @@ function stripCodeFence(text) {
   return fenceMatch ? fenceMatch[1].trim() : trimmed;
 }
 
-// Calls the Claude Code CLI headlessly (claude -p, prompt via stdin) as the fixed Judge.
-function callClaudeJudge(prompt, { timeoutMs = 120000 } = {}) {
+// Calls the OpenAI Responses API as the fixed Judge.
+async function callOpenAIJudge(prompt, { timeoutMs = 120000 } = {}) {
   const startedAt = Date.now();
-  const res = spawnSync(CLAUDE_BIN, ['-p'], {
-    input: prompt,
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    maxBuffer: 10 * 1024 * 1024,
-    shell: process.platform === 'win32',
-  });
-  const latencyMs = Date.now() - startedAt;
+  if (!process.env.OPENAI_API_KEY) {
+    return { ok: false, error: 'OPENAI_API_KEY is not set', latencyMs: Date.now() - startedAt };
+  }
 
-  if (res.error) return { ok: false, error: `spawn_error: ${res.error.message}`, latencyMs };
-  if (res.status !== 0) return { ok: false, error: `exit_${res.status}: ${(res.stderr || '').slice(0, 300)}`, latencyMs };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_JUDGE_MODEL || 'gpt-5',
+        input: prompt,
+        text: { format: { type: 'json_object' } },
+        store: false,
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    return { ok: false, error: `api_error: ${error.message}`, latencyMs: Date.now() - startedAt };
+  } finally {
+    clearTimeout(timer);
+  }
 
-  const stdout = (res.stdout || '').trim();
+  const payload = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: `api_${response.status}: ${JSON.stringify(payload).slice(0, 500)}`, latencyMs: Date.now() - startedAt };
+  }
+
+  const stdout = (payload.output_text || '').trim();
   const cleaned = stripCodeFence(stdout);
   try {
     const scores = JSON.parse(cleaned);
-    return { ok: true, scores, raw: stdout, latencyMs };
+    return { ok: true, scores, raw: stdout, latencyMs: Date.now() - startedAt };
   } catch (e) {
-    return { ok: false, error: `parse_error: ${e.message}`, raw: stdout, latencyMs };
+    return { ok: false, error: `parse_error: ${e.message}`, raw: stdout, latencyMs: Date.now() - startedAt };
   }
 }
 
-function judgeAnswer(fields, opts) {
-  return callClaudeJudge(buildJudgePrompt(fields), opts);
+async function judgeAnswer(fields, opts) {
+  return callOpenAIJudge(buildJudgePrompt(fields), opts);
 }
 
-function judgeRagStability(fields, opts) {
-  return callClaudeJudge(buildRagStabilityJudgePrompt(fields), opts);
+async function judgeRagStability(fields, opts) {
+  return callOpenAIJudge(buildRagStabilityJudgePrompt(fields), opts);
 }
 
 module.exports = { judgeAnswer, judgeRagStability, buildJudgePrompt, buildRagStabilityJudgePrompt };

@@ -59,7 +59,7 @@ async function main() {
     }
     const gold = goldFromContext(rec.contextBlock, faqMap);
     process.stdout.write(`  [${done + 1}/${lines.length}] ${rec.id} x ${rec.model} ... `);
-    const judge = judgeAnswer({
+    const judge = await judgeAnswer({
       faqQuestion: gold.question,
       faqAnswer: gold.answer,
       userQuery: rec.query,

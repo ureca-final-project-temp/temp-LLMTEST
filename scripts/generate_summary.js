@@ -12,8 +12,9 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const RAW_DIR = path.join(ROOT, 'results', 'raw');
 const RESULTS_DIR = path.join(ROOT, 'results');
+const RESULT_SUFFIX = process.env.RESULT_SUFFIX || '';
 
-const MODELS = [
+const DEFAULT_MODELS = [
   { tag: 'qwen3:0.6b', label: 'Qwen3 0.6B' },
   { tag: 'qwen3:1.7b', label: 'Qwen3 1.7B' },
   { tag: 'qwen3:4b', label: 'Qwen3 4B' },
@@ -24,6 +25,10 @@ const MODELS = [
   { tag: 'gemma3:1b', label: 'Gemma3 1B' },
   { tag: 'gemma3:4b', label: 'Gemma3 4B' },
 ];
+
+const MODELS = (process.env.LLM_TEST_MODELS
+  ? process.env.LLM_TEST_MODELS.split(',').map((tag) => ({ tag: tag.trim(), label: tag.trim() })).filter((m) => m.tag)
+  : DEFAULT_MODELS);
 
 const TYPES = ['HR', 'EC', 'CF', 'PI', 'SR', 'NC', 'MC'];
 
@@ -161,7 +166,7 @@ function main() {
 
 ## 1. FAQ 답변 생성 라운드
 
-정답 FAQ 1개를 주고 자연어로 얼마나 충실하게 재구성하는지 평가 (README 6절 1차 라운드). 자세한 케이스별 결과는 [\`faq_easy_results.md\`](faq_easy_results.md) / [\`faq_medium_results.md\`](faq_medium_results.md) / [\`faq_hard_results.md\`](faq_hard_results.md) 참고.
+정답 FAQ 1개를 주고 자연어로 얼마나 충실하게 재구성하는지 평가 (README 6절 1차 라운드). 자세한 케이스별 결과는 [\`faq_easy${RESULT_SUFFIX}_results.md\`](faq_easy${RESULT_SUFFIX}_results.md) / [\`faq_medium${RESULT_SUFFIX}_results.md\`](faq_medium${RESULT_SUFFIX}_results.md) / [\`faq_hard${RESULT_SUFFIX}_results.md\`](faq_hard${RESULT_SUFFIX}_results.md) 참고.
 
 ### Easy (직접 표현)
 
@@ -177,7 +182,7 @@ ${faqHardTable}
 
 ## 2. RAG 안정성 라운드 — 전체 적절 대응률
 
-무관/빈/모순/부분정보/유사오답/노이즈/다중조합 7개 유형에 대해 컨텍스트 개수(3/5/10개)를 늘려가며 테스트 (README 7-1절). 자세한 케이스별 결과는 [\`faq_rag_stability_small_results.md\`](faq_rag_stability_small_results.md) / [\`_medium_\`](faq_rag_stability_medium_results.md) / [\`_large_\`](faq_rag_stability_large_results.md) 참고.
+무관/빈/모순/부분정보/유사오답/노이즈/다중조합 7개 유형에 대해 컨텍스트 개수(3/5/10개)를 늘려가며 테스트 (README 7-1절). 자세한 케이스별 결과는 [\`faq_rag_stability_small${RESULT_SUFFIX}_results.md\`](faq_rag_stability_small${RESULT_SUFFIX}_results.md) / [\`faq_rag_stability_medium${RESULT_SUFFIX}_results.md\`](faq_rag_stability_medium${RESULT_SUFFIX}_results.md) / [\`faq_rag_stability_large${RESULT_SUFFIX}_results.md\`](faq_rag_stability_large${RESULT_SUFFIX}_results.md) 참고.
 
 ${ragOverview}
 
@@ -218,7 +223,7 @@ ${ragPerfLarge}
 - 의도 분류·클러스터 라벨링 라운드는 아직 실행 전이라 이 문서에 포함되지 않았습니다 (\`CLAUDE.md\` 참고)
 `;
 
-  const outPath = path.join(RESULTS_DIR, 'summary_results.md');
+  const outPath = path.join(RESULTS_DIR, `summary_results${RESULT_SUFFIX}.md`);
   fs.writeFileSync(outPath, content, 'utf8');
   console.log(`Wrote ${outPath}`);
 }
