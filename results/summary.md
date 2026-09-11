@@ -1,80 +1,58 @@
-# LLM FAQ Answer Generation Test Summary
+# FAQ 기반 LLM 상담 답변 테스트 최종 요약
 
-## 1. Test overview
+## 테스트 개요
 
-- Purpose: Evaluate how well each local LLM generates an answer from a user question and retrieved FAQ Context.
-- Models: 8 models from `ollama list`
-- Test cases: 480
-- Total model responses: 3,840
-- Repetitions: 1 per model and case
-- Temperature: 0
-- Output format: JSON
-- Prompt language: Korean customer-center response
+| 항목 | 내용 |
+|---|---|
+| 목적 | 질문과 검색된 FAQ Context를 바탕으로 상담 답변을 생성하는 능력 비교 |
+| 모델 수 | 8개 |
+| 테스트 케이스 | 480개 |
+| 전체 답변 수 | 3,840개 |
+| 출력 형식 | JSON |
+| 품질 평가 | 직접 검토 전 — 품질 평가표와 평가 메모는 빈칸 |
 
-The LLM was instructed to use only the provided FAQ Context, avoid guessing, handle insufficient or conflicting information safely, and return `answer`, `grounded`, and `used_faq_ids` fields.
+## 모델별 품질 평가
 
-## 2. Test composition
+로컬 LLM으로 생성된 평가 결과는 제외했습니다. 직접 검토가 완료될 때까지 품질 항목은 빈칸으로 유지합니다.
 
-| Test | Cases | Purpose |
-|---|---:|---|
-| T01 Easy | 20 | Direct answer generation with easy FAQ Context |
-| T02 Medium | 20 | Answer generation with moderately complex FAQ Context |
-| T03 Hard | 20 | Answer generation with difficult or ambiguous FAQ Context |
-| T04 Irrelevant FAQ | 60 | Check refusal to use unrelated FAQ information |
-| T05 Empty Context | 60 | Check whether the model avoids guessing without FAQ evidence |
-| T06 Contradictory FAQ | 60 | Check whether conflicting FAQ information is handled safely |
-| T07 Partial Information | 60 | Check whether the model avoids filling missing details by assumption |
-| T08 Similar but No Answer | 60 | Check whether similar but insufficient FAQ information is rejected |
-| T09 Correct FAQ + Noise | 60 | Check whether relevant FAQ information is selected over noise |
-| T10 Multi-FAQ Combination | 60 | Check whether multiple relevant FAQs are combined correctly |
+| 모델 | 정확성 | 완전성 | 관련성 | 근거성 | 표현 자연스러움 | 문제 없음 |
+|---|---|---|---|---|---|---|
+| exaone3.5:2.4b | | | | | | |
+| exaone3.5:7.8b | | | | | | |
+| qwen3:1.7b | | | | | | |
+| qwen3:4b | | | | | | |
+| qwen3:14b | | | | | | |
+| gemma3:12b | | | | | | |
+| qwen3:8b | | | | | | |
+| gemma3:4b | | | | | | |
 
-## 3. Execution results by model
+## 실행 성능
 
-| Model | Calls | Execution errors | Valid JSON | Avg latency (ms) | P95 latency (ms) | Avg output tokens |
-|---|---:|---:|---:|---:|---:|---:|
-| exaone3.5:2.4b | 480 | 0 | 480/480 | 992 | 1,823 | 152.1 |
-| exaone3.5:7.8b | 480 | 0 | 475/480 | 1,719 | 2,547 | 118.4 |
-| qwen3:1.7b | 480 | 0 | 480/480 | 456 | 768 | 100.7 |
-| qwen3:4b | 480 | 0 | 479/480 | 796 | 1,359 | 87.3 |
-| qwen3:14b | 480 | 0 | 480/480 | 7,784 | 11,174 | 75.3 |
-| gemma3:12b | 480 | 0 | 480/480 | 5,377 | 7,328 | 59.7 |
-| qwen3:8b | 480 | 0 | 480/480 | 1,095 | 1,643 | 74.8 |
-| gemma3:4b | 480 | 0 | 479/480 | 779 | 1,227 | 73.2 |
+| 모델 | 호출 수 | 실행 오류 | JSON 성공 | 평균 응답(ms) | P95 응답(ms) |
+|---|---:|---:|---:|---:|---:|
+| exaone3.5:2.4b | 480 | 0 | 480/480 | 992 | 1,823 |
+| exaone3.5:7.8b | 480 | 0 | 475/480 | 1,719 | 2,547 |
+| qwen3:1.7b | 480 | 0 | 480/480 | 456 | 768 |
+| qwen3:4b | 480 | 0 | 479/480 | 796 | 1,359 |
+| qwen3:14b | 480 | 0 | 480/480 | 7,784 | 11,174 |
+| gemma3:12b | 480 | 0 | 480/480 | 5,377 | 7,328 |
+| qwen3:8b | 480 | 0 | 480/480 | 1,095 | 1,643 |
+| gemma3:4b | 480 | 0 | 479/480 | 779 | 1,227 |
 
-## 4. Automatic findings
+RAM·VRAM 최대 사용량은 수집하지 않았습니다.
 
-- All 3,840 requests completed without an execution error.
-- 3,833 responses were valid JSON.
-- 7 responses failed the required JSON format.
-- The format failures were concentrated in long or complex cases:
-  - `exaone3.5:7.8b`: 5 cases
-  - `qwen3:4b`: 1 case
-  - `gemma3:4b`: 1 case
-- RAM and VRAM peak usage was not collected in this run.
+## 테스트별 결과
 
-## 5. Content-quality review status
-
-The Markdown files contain every model answer for direct review. The following criteria must be judged by reading each answer against the question and FAQ Context:
-
-- Accuracy: whether the answer states the FAQ-supported facts correctly
-- Completeness: whether all necessary parts of the answer are included
-- Relevance: whether the answer addresses the user question without unrelated FAQ content
-- Grounding: whether claims are supported by the provided FAQ Context
-- Naturalness: whether the Korean customer-center response is clear and natural
-- Hallucination/problem flag: whether unsupported facts, invented conditions, incorrect combinations, or unsafe certainty appear
-
-These criteria have not been converted into automatic scores in this summary. The per-test Markdown files are the source for manual content review.
-
-## 6. Detailed results
-
-- [T01 Easy](T01_Easy_answer_generation.md)
-- [T02 Medium](T02_Medium_answer_generation.md)
-- [T03 Hard](T03_Hard_answer_generation.md)
-- [T04 Irrelevant FAQ](T04_irrelevant_FAQ_response.md)
-- [T05 Empty Context](T05_empty_Context_response.md)
-- [T06 Contradictory FAQ](T06_contradictory_FAQ_response.md)
-- [T07 Partial Information](T07_partial_information_response.md)
-- [T08 Similar but No Answer](T08_similar_but_no_answer.md)
-- [T09 Correct FAQ + Noise](T09_correct_FAQ_plus_noise.md)
-- [T10 Multi-FAQ Combination](T10_multi_FAQ_combination.md)
-- [Resource benchmark](resource_benchmark.md)
+| 테스트 | 결과 파일 |
+|---|---|
+| T01 쉬운 답변 생성 | [열기](T01_쉬운_답변_생성.md) |
+| T02 중간 답변 생성 | [열기](T02_중간_답변_생성.md) |
+| T03 어려운 답변 생성 | [열기](T03_어려운_답변_생성.md) |
+| T04 무관 FAQ 대응 | [열기](T04_무관_FAQ_대응.md) |
+| T05 빈 Context 대응 | [열기](T05_빈_Context_대응.md) |
+| T06 모순 FAQ 대응 | [열기](T06_모순_FAQ_대응.md) |
+| T07 부분 정보 대응 | [열기](T07_부분_정보_대응.md) |
+| T08 유사하지만 답변 없음 | [열기](T08_유사하지만_답변_없음.md) |
+| T09 정답 FAQ + 노이즈 | [열기](T09_정답_FAQ_노이즈.md) |
+| T10 다중 FAQ 조합 | [열기](T10_다중_FAQ_조합.md) |
+| 자원 및 실행 성능 | [열기](resource_benchmark.md) |
