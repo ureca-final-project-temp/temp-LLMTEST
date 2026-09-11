@@ -319,6 +319,7 @@ node scripts/aggregate_rag_stability_round.js small          # 4. 결과 문서 
 
 | 문서 | 내용 | 상태 |
 |---|---|---|
+| [`results/summary_results.md`](results/summary_results.md) | **전체 6개 라운드 종합 요약** (FAQ Easy/Medium/Hard + RAG 안정성 Small/Medium/Large, 유형별 상세 포함) — `scripts/generate_summary.js`로 자동 생성 | ✅ 실행 완료 |
 | [`results/faq_easy_results.md`](results/faq_easy_results.md) | Easy 난이도 모델별 결과 | ✅ 실행 완료 |
 | [`results/faq_medium_results.md`](results/faq_medium_results.md) | Medium 난이도 모델별 결과 | ✅ 실행 완료 |
 | [`results/faq_hard_results.md`](results/faq_hard_results.md) | Hard 난이도 모델별 결과 | ✅ 실행 완료 |
@@ -362,12 +363,14 @@ LLM_Test/
 │   ├── run_rag_stability_round.js
 │   ├── score_rag_stability.js
 │   ├── judge_rag_stability_round.js
-│   └── aggregate_rag_stability_round.js
+│   ├── aggregate_rag_stability_round.js
+│   └── generate_summary.js              # 전체 라운드 종합 요약 생성 (results/summary_results.md)
 └── results/
     ├── raw/                              # 스크립트 중간 산출물 (jsonl), 사람이 직접 편집하지 않음
     │   ├── faq_easy.jsonl
     │   ├── faq_easy.scored.jsonl
     │   └── faq_easy.judged.jsonl
+    ├── summary_results.md               # 전체 6개 라운드 종합 요약 (유형별 상세 포함)
     ├── faq_easy_results.md
     ├── faq_medium_results.md
     ├── faq_hard_results.md
