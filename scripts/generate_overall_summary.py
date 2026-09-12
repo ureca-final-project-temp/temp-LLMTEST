@@ -7,7 +7,7 @@ from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "results", "raw", "llm_answer_generation.jsonl")
-OUT = os.path.join(ROOT, "results", "overall_summary.md")
+OUT = os.path.join(ROOT, "results", "최종_결과.md")
 
 spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "scripts", "generate_direct_reviews.py"))
 review = importlib.util.module_from_spec(spec)

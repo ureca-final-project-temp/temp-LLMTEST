@@ -16,11 +16,11 @@ RAW = os.path.join(ROOT, "results", "raw", "llm_answer_generation.jsonl")
 OUT = os.path.join(ROOT, "results")
 
 FILES = {
-    "T01": "T01_easy.md", "T02": "T02_medium.md", "T03": "T03_hard.md",
-    "T04": "T04_irrelevant_faq.md", "T05": "T05_empty_context.md",
-    "T06": "T06_conflicting_faq.md", "T07": "T07_partial_information.md",
-    "T08": "T08_similar_no_answer.md", "T09": "T09_correct_faq_noise.md",
-    "T10": "T10_multi_faq.md",
+    "T01": "T01_쉬운_답변_생성_최종.md", "T02": "T02_중간_답변_생성_최종.md",
+    "T03": "T03_어려운_답변_생성_최종.md", "T04": "T04_무관_FAQ_대응_최종.md",
+    "T05": "T05_빈_Context_대응_최종.md", "T06": "T06_모순_FAQ_대응_최종.md",
+    "T07": "T07_부분_정보_대응_최종.md", "T08": "T08_유사하지만_답변_없음_최종.md",
+    "T09": "T09_정답_FAQ_노이즈_최종.md", "T10": "T10_다중_FAQ_조합_최종.md",
 }
 TITLES = {
     "T01": "Easy answer generation", "T02": "Medium answer generation",
