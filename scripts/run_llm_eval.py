@@ -171,6 +171,26 @@ def installed_models():
     return models
 
 
+def ollama_ps(model=None):
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        for item in payload.get("models", []):
+            if model is None or item.get("name") == model:
+                size = int(item.get("size", 0) or 0)
+                size_vram = int(item.get("size_vram", 0) or 0)
+                return {
+                    "name": item.get("name", model),
+                    "size_bytes": size,
+                    "size_vram_bytes": size_vram,
+                    "ram_bytes": max(size - size_vram, 0),
+                    "processor": item.get("processor", ""),
+                }
+        return None
+    except Exception:
+        return None
+
+
 def call_ollama(model, user_prompt):
     payload = json.dumps({
         "model": model,
@@ -191,8 +211,10 @@ def call_ollama(model, user_prompt):
     )
     started = time.perf_counter()
     try:
+        resource_before = ollama_ps(model)
         with urllib.request.urlopen(request, timeout=180) as response:
             data = json.loads(response.read().decode("utf-8"))
+        resource_after = ollama_ps(model)
         latency_ms = round((time.perf_counter() - started) * 1000)
         raw = data.get("message", {}).get("content", "")
         parsed = None
@@ -214,9 +236,11 @@ def call_ollama(model, user_prompt):
             "eval_count": data.get("eval_count"),
             "eval_duration_ns": data.get("eval_duration"),
             "prompt_eval_count": data.get("prompt_eval_count"),
+            "resource_before": resource_before,
+            "resource_after": resource_after,
         }
     except Exception as exc:
-        return {"ok": False, "latency_ms": round((time.perf_counter() - started) * 1000), "error": repr(exc)}
+        return {"ok": False, "latency_ms": round((time.perf_counter() - started) * 1000), "error": repr(exc), "resource_before": locals().get("resource_before"), "resource_after": locals().get("resource_after")}
 
 
 def main():
