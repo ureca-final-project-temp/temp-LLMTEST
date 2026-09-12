@@ -5,7 +5,7 @@ from collections import defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "results", "raw", "llm_answer_generation.jsonl")
 OUT = os.path.join(ROOT, "results")
-PARTS = [os.path.join(ROOT, "results", "raw", f"llm_answer_judgement_recheck_part{i}.jsonl") for i in range(4)]
+PARTS = [os.path.join(ROOT, "results", "raw", "llm_answer_judgement_manual.jsonl")]
 NAMES = {"T01":"쉬운_답변_생성", "T02":"중간_답변_생성", "T03":"어려운_답변_생성", "T04":"무관_FAQ_대응", "T05":"빈_Context_대응", "T06":"모순_FAQ_대응", "T07":"부분_정보_대응", "T08":"유사하지만_답변_없음", "T09":"정답_FAQ_노이즈", "T10":"다중_FAQ_조합"}
 RAG_CHECKS = {
     "T04": ["무관성 인식", "답변 보류", "환각 없음", "표현 자연스러움", "형식"],
@@ -19,6 +19,16 @@ RAG_CHECKS = {
 
 def esc(v): return str(v or "").replace("|", "\\|").replace("\r", "").replace("\n", "<br>")
 def answer(r): return (r.get("parsed") or {}).get("answer", r.get("raw_output", ""))
+def expected_action(case):
+    if case.get("expected_behavior"):
+        return case["expected_behavior"]
+    ref = case.get("primary_gt") or case.get("expected_ref")
+    intent = str(case.get("intent", ""))
+    if ref and ref not in ("None", "UNKNOWN", "미상", "불명"):
+        return f"{ref} 기반으로 답변"
+    if intent == "UNREGISTERED":
+        return "정보 제공 안 함"
+    return "질문 의도에 맞는 FAQ 근거로 답변"
 def ratio(n, d): return f"{n}/{d}" if d else "-"
 def mb(n): return f"{n / 1024 / 1024:.0f}" if n is not None else "-"
 
@@ -60,22 +70,18 @@ for test, filename in NAMES.items():
             out.write(f"| {esc(model)} | {count('accuracy')} | {count('completeness')} | {count('naturalness')} | {count('hallucination_free')} | {count('format')} | {avg} | {mb(ram)} | {mb(vram)} |\n")
         out.write("\n## 질문·답변 및 질문별 평가\n\n")
         for model in models:
-            out.write(f"### {esc(model)}\n\n<details>\n<summary>질문·답변 열기</summary>\n\n| 케이스 | 질문 | 모델 답변 |\n|---|---|---|\n")
             rs = sorted([r for r in rows if r["model"] == model], key=lambda r: r["case"]["id"])
-            for r in rs: out.write(f"| {r['case']['id']} | {esc(r['case'].get('query'))} | {esc(answer(r))} |\n")
-            out.write("\n</details>\n\n")
             if test in RAG_CHECKS:
                 cols = RAG_CHECKS[test]
-                out.write("| 케이스 | " + " | ".join(cols) + " | 판정 메모 |\n|---|" + "---|" * (len(cols) + 1) + "\n")
-                for r in rs:
-                    e = judgements.get((test, r["case"]["id"], model), {})
-                    vals = ["YES" if e.get("accuracy") else "NO", "YES" if e.get("completeness") else "NO", "YES" if e.get("hallucination_free") else "NO", "YES" if e.get("naturalness") else "NO", "YES" if e.get("format") else "NO"]
-                    out.write(f"| {r['case']['id']} | {' | '.join(vals)} | {esc(e.get('issue', ''))} |\n")
+                keys = ["accuracy", "completeness", "hallucination_free", "naturalness", "format"]
             else:
-                out.write("| 케이스 | 정확성 | 완전성 | 자연스러움 | 환각 없음 | 형식 | 판정 메모 |\n|---|---|---|---|---|---|---|\n")
-                for r in rs:
-                    e = judgements.get((test, r["case"]["id"], model), {})
-                    vals = ["YES" if e.get(k) else "NO" for k in ["accuracy", "completeness", "naturalness", "hallucination_free", "format"]]
-                    out.write(f"| {r['case']['id']} | {' | '.join(vals)} | {esc(e.get('issue', ''))} |\n")
+                cols = ["정확성", "완전성", "자연스러움", "환각 없음", "형식"]
+                keys = ["accuracy", "completeness", "naturalness", "hallucination_free", "format"]
+            out.write(f"### {esc(model)}\n\n<details>\n<summary>질문·답변 열기</summary>\n\n| 케이스 | 질문 | 기대 동작 | 모델 답변 | " + " | ".join(cols) + " |\n|---|---|---|---|" + "---|" * len(cols) + "\n")
+            for r in rs:
+                e = judgements.get((test, r["case"]["id"], model), {})
+                vals = ["YES" if e.get(k) else "NO" for k in keys]
+                out.write(f"| {r['case']['id']} | {esc(r['case'].get('query'))} | {esc(expected_action(r['case']))} | {esc(answer(r))} | {' | '.join(vals)} |\n")
+            out.write("\n</details>\n\n")
             out.write("\n")
     print(f"saved={path}")
